@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NIGHT_CITY // GRATITUDE.EXE</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --black: #000000;
+    --pink: #ff007f;
+    --pink-dim: #7a0040;
+    --cyan: #00f0ff;
+    --cyan-dim: #006670;
+    --text: #d8f7ff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--black);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    overflow: hidden;
+  }
+
+  #sim-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: 0;
+    display: block;
+  }
+
+  /* scanlines + grain */
+  #scan-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,240,255,0.035) 0px,
+      rgba(0,240,255,0.035) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: screen;
+  }
+
+  #vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
+  }
+
+  .glitch-flash {
+    animation: glitchflash 0.35s steps(2);
+  }
+  @keyframes glitchflash {
+    0% { filter: none; }
+    20% { filter: hue-rotate(30deg) saturate(2) brightness(1.4); transform: translateX(2px); }
+    40% { filter: hue-rotate(-20deg) saturate(1.8); transform: translateX(-3px); }
+    60% { filter: brightness(1.6); transform: translateX(1px); }
+    100% { filter: none; transform: none; }
+  }
+
+  /* HUD title */
+  #hud-title {
+    position: fixed;
+    top: 5vh;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    text-align: center;
+    pointer-events: none;
+    width: 90vw;
+  }
+  #hud-title .tag {
+    font-size: 0.7rem;
+    letter-spacing: 0.35em;
+    color: var(--cyan);
+    text-shadow: 0 0 8px var(--cyan);
+    margin-bottom: 0.6rem;
+  }
+  #hud-title h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(1.4rem, 4.6vw, 3.2rem);
+    color: #fff;
+    text-shadow:
+      0 0 6px var(--pink),
+      0 0 22px var(--pink),
+      2px 0 0 var(--cyan),
+      -2px 0 0 rgba(255,0,127,0.5);
+    letter-spacing: 0.04em;
+  }
+  #hud-title .sub {
+    margin-top: 0.7rem;
+    font-size: 0.82rem;
+    color: #8fd8e8;
+    letter-spacing: 0.05em;
+    max-width: 46ch;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.5;
+  }
+
+  /* corner brackets, tech HUD frame */
+  .corner {
+    position: fixed;
+    width: 26px; height: 26px;
+    border: 2px solid var(--cyan);
+    z-index: 6;
+    opacity: 0.7;
+    pointer-events: none;
+  }
+  #c-tl { top: 18px; left: 18px; border-right: none; border-bottom: none; }
+  #c-tr { top: 18px; right: 18px; border-left: none; border-bottom: none; }
+  #c-bl { bottom: 18px; left: 18px; border-right: none; border-top: none; }
+  #c-br { bottom: 18px; right: 18px; border-left: none; border-top: none; }
+
+  /* AUDIO PLAYER */
+  #player {
+    position: fixed;
+    bottom: 5vh;
+    left: 4vw;
+    z-index: 10;
+    width: min(320px, 80vw);
+    background: rgba(0,0,0,0.72);
+    border: 1px solid var(--pink);
+    box-shadow: 0 0 18px rgba(255,0,127,0.25), inset 0 0 24px rgba(255,0,127,0.05);
+    backdrop-filter: blur(6px);
+  }
+  #player .player-head {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid rgba(0,240,255,0.3);
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    color: var(--cyan);
+  }
+  #player .player-head .dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--pink);
+    box-shadow: 0 0 6px var(--pink);
+    margin-right: 6px;
+    animation: pulse-dot 1.6s infinite;
+  }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  #track-list { padding: 0.9rem 1rem 0.4rem; }
+  .track {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.4rem;
+    font-size: 0.92rem;
+    color: var(--pink);
+    text-shadow: 0 0 6px rgba(255,0,127,0.6);
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    border-left: 2px solid transparent;
+    transition: all 0.2s ease;
+  }
+  .track .idx { color: var(--pink-dim); font-size: 0.75rem; }
+  .track:hover { border-left-color: var(--pink); background: rgba(255,0,127,0.06); }
+  .track.active {
+    color: var(--cyan);
+    text-shadow: 0 0 8px var(--cyan), 0 0 16px var(--cyan);
+    border-left-color: var(--cyan);
+    background: rgba(0,240,255,0.06);
+  }
+  .track.active .idx { color: var(--cyan-dim); }
+
+  #player-status {
+    padding: 0.3rem 1.1rem 0.7rem;
+    font-size: 0.65rem;
+    color: #567b85;
+    letter-spacing: 0.08em;
+    min-height: 1.4em;
+  }
+
+  #toggle-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 0 0 1rem;
+  }
+  #play-toggle {
+    width: 52px; height: 52px;
+    border: 1px solid var(--cyan);
+    background: rgba(0,240,255,0.05);
+    box-shadow: 0 0 14px rgba(0,240,255,0.35), inset 0 0 10px rgba(0,240,255,0.1);
+    color: var(--cyan);
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  #play-toggle:hover {
+    transform: scale(1.06);
+    box-shadow: 0 0 22px rgba(0,240,255,0.55), inset 0 0 14px rgba(0,240,255,0.2);
+  }
+  #play-toggle:active { transform: scale(0.96); }
+
+  /* DIALOG BOX for physics nodes */
+  #node-dialog {
+    position: fixed;
+    bottom: 5vh;
+    right: 4vw;
+    z-index: 10;
+    width: min(380px, 88vw);
+    background: rgba(0,0,0,0.82);
+    border: 1px solid var(--cyan);
+    box-shadow: 0 0 24px rgba(0,240,255,0.2);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transform: translateY(16px);
+    pointer-events: none;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  #node-dialog.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  #node-dialog .dialog-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.9rem;
+    border-bottom: 1px solid rgba(255,0,127,0.3);
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    color: var(--pink);
+  }
+  #dialog-close {
+    background: none;
+    border: none;
+    color: #567b85;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #dialog-close:hover { color: var(--pink); }
+  #node-dialog .dialog-body {
+    padding: 1.2rem 1.2rem 1.5rem;
+    font-size: 0.96rem;
+    line-height: 1.65;
+    color: var(--text);
+  }
+
+  #hint {
+    position: fixed;
+    bottom: 2vh;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: #4c7480;
+  }
+
+  @media (max-width: 720px) {
+    #player { left: 50%; transform: translateX(-50%); bottom: auto; top: 32vh; }
+    #node-dialog { left: 50%; right: auto; transform: translateX(-50%) translateY(16px); bottom: 3vh; }
+    #node-dialog.visible { transform: translateX(-50%) translateY(0); }
+    #hud-title { top: 3vh; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="sim-canvas"></canvas>
+<div id="vignette"></div>
+<div id="scan-overlay"></div>
+
+<div class="corner" id="c-tl"></div>
+<div class="corner" id="c-tr"></div>
+<div class="corner" id="c-bl"></div>
+<div class="corner" id="c-br"></div>
+
+<div id="hud-title">
+  <div class="tag">SIGNAL_INTERCEPT :: NIGHT_CITY :: 2077.09.05</div>
+  <h1>HAPPY TEACHER'S DAY</h1>
+  <div class="sub"> Every signal carries a memory. The six below are still broadcasting.The archive was meant to be experienced with the city's noise in the background.</div>
+</div>
+
+<!-- AUDIO PLAYER -->
+<div id="player">
+  <div class="player-head"><span><span class="dot"></span>AUDIO_FEED</span><span>NIGHT_CITY.FM</span></div>
+  <div id="track-list">
+    <div class="track" data-track="0"><span class="idx">01</span><span>Call of the Silence</span></div>
+    <div class="track" data-track="1"><span class="idx">02</span><span>Let You Down</span></div>
+    <div class="track" data-track="2"><span class="idx">03</span><span>I Really Want to Stay at Your House</span></div>
+  </div>
+  <div id="player-status">STATUS :: NO TRACK SELECTED</div>
+  <div id="toggle-wrap">
+    <button id="play-toggle" aria-label="Play or pause">&#9658;</button>
+  </div>
+</div>
+
+<!-- HIDDEN YOUTUBE PLAYER -->
+<div id="yt-player" style="position:fixed; width:0; height:0; overflow:hidden; opacity:0; pointer-events:none;"></div>
+
+<!-- DIALOG BOX -->
+<div id="node-dialog">
+  <div class="dialog-head">
+    <span id="dialog-id">TRANSMISSION // 01</span>
+    <button id="dialog-close">[ CLOSE ]</button>
+  </div>
+  <div class="dialog-body" id="dialog-body">—</div>
+</div>
+
+<div id="hint">DRAG THE FIELD // CLICK A NODE // SCROLL TO ZOOM</div>
+
+<script>
+/* =========================================================
+   NIGHT CITY GRATITUDE — canvas physics sim + audio player
+   ========================================================= */
+
+/* ---------- 1. PHYSICS SIMULATION (Canvas API) ---------- */
+const canvas = document.getElementById('sim-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, DPR;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const MESSAGES = [
+  "Most people pass through our lives quietly. Some leave a mark just as quietly.I don't think you'll ever know how many things you explained that weren't in the syllabus.",
+  "Some lessons are forgotten after exams. Some stay long after the chapter ends.Years from now, I may not remember every formula, but I think I'll remember the person who taught me to ask 'why' before 'how.' ",
+  "You probably think you were just doing your job. I don't think that's all you were doing.I never had many reasons to like physics. Now I have at least one.",
+  "We'll all move on to different classes, different subjects, and different stages of life. That's how time works. But every student carries a few chapters with them long after school is over.Thank you for being one of the chapters worth keeping",
+  "Some classes end when the bell rings. Yours usually stay in my head for the rest of the day.Years from now, I'll probably forget a lot of formulas. I don't think I'll forget the way you taught them.",
+  "It's strange how a person can change the way you look at a subject without ever realizing it.You made physics feel a little less distant.You'll probably never know the full impact you had and maybe that's what makes teaching such a beautiful thing. Happy Teachers' Day, ma'am."
+];
+
+const NEON = ['#ff007f', '#00f0ff'];
+
+// view rotation state (drag = orbit-ish parallax, since this is a 2D canvas field)
+const view = { rotX: 0, rotY: 0, targetRotX: 0, targetRotY: 0, zoom: 1, targetZoom: 1 };
+let dragging = false, lastPX = 0, lastPY = 0;
+
+canvas.addEventListener('pointerdown', (e) => {
+  dragging = true; lastPX = e.clientX; lastPY = e.clientY;
+});
+window.addEventListener('pointerup', () => dragging = false);
+window.addEventListener('pointermove', (e) => {
+  if (dragging) {
+    const dx = e.clientX - lastPX;
+    const dy = e.clientY - lastPY;
+    view.targetRotY += dx * 0.0022;
+    view.targetRotX -= dy * 0.0022;
+    view.targetRotX = Math.max(-0.5, Math.min(0.5, view.targetRotX));
+    lastPX = e.clientX; lastPY = e.clientY;
+  }
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  view.targetZoom += e.deltaY * -0.0006;
+  view.targetZoom = Math.max(0.6, Math.min(1.6, view.targetZoom));
+}, { passive: false });
+
+// Ambient background "data" particles
+const AMBIENT_N = 90;
+const ambient = [];
+for (let i = 0; i < AMBIENT_N; i++) {
+  ambient.push({
+    x: Math.random() * 2 - 1,
+    y: Math.random() * 2 - 1,
+    z: Math.random() * 2 - 1,
+    vx: (Math.random() - 0.5) * 0.0006,
+    vy: (Math.random() - 0.5) * 0.0006,
+    vz: (Math.random() - 0.5) * 0.0006,
+    r: Math.random() * 1.4 + 0.4
+  });
+}
+
+// The 6 interactive glowing nodes — arranged on a sphere shell, drift with light physics
+const NODE_N = 6;
+const nodes = [];
+for (let i = 0; i < NODE_N; i++) {
+  const phi = Math.acos(1 - 2 * (i + 0.5) / NODE_N);
+  const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+  nodes.push({
+    x: Math.sin(phi) * Math.cos(theta) * 0.62,
+    y: Math.sin(phi) * Math.sin(theta) * 0.62,
+    z: Math.cos(phi) * 0.62,
+    vx: (Math.random() - 0.5) * 0.0004,
+    vy: (Math.random() - 0.5) * 0.0004,
+    vz: (Math.random() - 0.5) * 0.0004,
+    baseR: 13,
+    r: 13,
+    color: NEON[i % 2],
+    phase: Math.random() * Math.PI * 2,
+    id: i,
+    message: MESSAGES[i],
+    hover: false
+  });
+}
+
+let hoveredNode = null;
+let mouseScreenX = -9999, mouseScreenY = -9999;
+
+function project(p) {
+  // simple rotation around Y then X, then perspective-ish projection
+  let x = p.x, y = p.y, z = p.z;
+  const cosY = Math.cos(view.rotY), sinY = Math.sin(view.rotY);
+  let x1 = x * cosY - z * sinY;
+  let z1 = x * sinY + z * cosY;
+  const cosX = Math.cos(view.rotX), sinX = Math.sin(view.rotX);
+  let y1 = y * cosX - z1 * sinX;
+  let z2 = y * sinX + z1 * cosX;
+
+  const scale = 0.42 * Math.min(W, H) * view.zoom;
+  const persp = 1 / (1.8 - z2 * 0.5);
+  return {
+    sx: W / 2 + x1 * scale * persp,
+    sy: H / 2 + y1 * scale * persp,
+    depth: z2,
+    persp
+  };
+}
+
+canvas.addEventListener('pointermove', (e) => {
+  mouseScreenX = e.clientX;
+  mouseScreenY = e.clientY;
+});
+
+let downX = 0, downY = 0;
+canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+canvas.addEventListener('pointerup', (e) => {
+  const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+  if (moved > 6) return;
+  if (hoveredNode) {
+    triggerNode(hoveredNode);
+  }
+});
+
+const dialog = document.getElementById('node-dialog');
+const dialogBody = document.getElementById('dialog-body');
+const dialogId = document.getElementById('dialog-id');
+const body = document.body;
+
+function triggerNode(node) {
+  body.classList.remove('glitch-flash');
+  void body.offsetWidth; // restart animation
+  body.classList.add('glitch-flash');
+  node.pulseUntil = performance.now() + 700;
+
+  dialogId.textContent = 'TRANSMISSION // ' + String(node.id + 1).padStart(2, '0');
+  dialogBody.textContent = node.message;
+  dialog.classList.add('visible');
+}
+document.getElementById('dialog-close').addEventListener('click', () => {
+  dialog.classList.remove('visible');
+});
+
+function step() {
+  view.rotX += (view.targetRotX - view.rotX) * 0.08;
+  view.rotY += (view.targetRotY - view.rotY) * 0.08;
+  view.zoom += (view.targetZoom - view.zoom) * 0.08;
+  if (!dragging) view.targetRotY += 0.0009; // idle auto-drift
+
+  ambient.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.z += p.vz;
+    if (p.x > 1 || p.x < -1) p.vx *= -1;
+    if (p.y > 1 || p.y < -1) p.vy *= -1;
+    if (p.z > 1 || p.z < -1) p.vz *= -1;
+  });
+
+  nodes.forEach(n => {
+    n.x += n.vx; n.y += n.vy; n.z += n.vz;
+    const d = Math.sqrt(n.x*n.x + n.y*n.y + n.z*n.z);
+    if (d > 0.7 || d < 0.5) { n.vx *= -1; n.vy *= -1; n.vz *= -1; }
+  });
+}
+
+function draw(t) {
+  ctx.clearRect(0, 0, W, H);
+
+  // subtle grid floor (HUD tech feel)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,240,255,0.06)';
+  ctx.lineWidth = 1;
+  const gridSize = 40;
+  for (let x = 0; x < W; x += gridSize) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // ambient particles
+  ambient.forEach(p => {
+    const pr = project(p);
+    const alpha = 0.15 + (pr.depth + 1) * 0.12;
+    ctx.fillStyle = `rgba(0,240,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(pr.sx, pr.sy, p.r * pr.persp, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // connecting lines between nodes (network aesthetic)
+  ctx.lineWidth = 1;
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = project(nodes[i]);
+      const b = project(nodes[j]);
+      const dist = Math.hypot(a.sx - b.sx, a.sy - b.sy);
+      if (dist < Math.min(W, H) * 0.42) {
+        const alpha = 0.12 * (1 - dist / (Math.min(W, H) * 0.42));
+        ctx.strokeStyle = `rgba(255,0,127,${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(a.sx, a.sy);
+        ctx.lineTo(b.sx, b.sy);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // find hovered node (screen-space distance, using current projections)
+  hoveredNode = null;
+  let hoverDist = 9999;
+
+  // sort by depth so closer nodes draw on top
+  const sorted = nodes.slice().sort((a, b) => project(a).depth - project(b).depth);
+
+  sorted.forEach(n => {
+    const pr = project(n);
+    const pulse = n.pulseUntil && performance.now() < n.pulseUntil
+      ? 1.9 - (n.pulseUntil - performance.now()) / 700
+      : 1;
+    const breathing = 1 + 0.08 * Math.sin(t * 0.0016 + n.phase);
+    const screenR = n.baseR * pr.persp * breathing * pulse;
+
+    const dToMouse = Math.hypot(mouseScreenX - pr.sx, mouseScreenY - pr.sy);
+    n.hover = dToMouse < screenR + 14;
+    if (n.hover && dToMouse < hoverDist) { hoveredNode = n; hoverDist = dToMouse; }
+
+    // glow
+    const glowR = screenR * (n.hover ? 4.2 : 3.2);
+    const grad = ctx.createRadialGradient(pr.sx, pr.sy, 0, pr.sx, pr.sy, glowR);
+    grad.addColorStop(0, n.color + 'cc');
+    grad.addColorStop(0.3, n.color + '55');
+    grad.addColorStop(1, n.color + '00');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(pr.sx, pr.sy, glowR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // core
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(pr.sx, pr.sy, screenR * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = n.color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(pr.sx, pr.sy, screenR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // label ring tick marks (HUD feel) when hovered
+    if (n.hover) {
+      ctx.strokeStyle = n.color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(pr.sx, pr.sy, screenR + 10, 0, Math.PI * 1.4);
+      ctx.stroke();
+    }
+  });
+
+  canvas.style.cursor = hoveredNode ? 'pointer' : (dragging ? 'grabbing' : 'grab');
+}
+
+function loop(t) {
+  step();
+  draw(t);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+
+/* ---------- 2. AUDIO PLAYER + YOUTUBE IFRAME API ---------- */
+
+const TRACKS = [
+  { title: "Call of the Silence", videoId: "e6U-8vCkaPE" },
+  { title: "Let You Down", videoId: "BnnbP7pCIvQ" },
+  { title: "I Really Want to Stay at Your House", videoId: "q74fX9CnqtQ" }
+];
+
+let ytPlayer = null;
+let ytReady = false;
+let currentTrack = null;
+let isPlaying = false;
+let pendingTrackIndex = null;
+
+const statusEl = document.getElementById('player-status');
+const toggleBtn = document.getElementById('play-toggle');
+const trackEls = document.querySelectorAll('.track');
+
+// Load YouTube Iframe API asynchronously
+const ytScript = document.createElement('script');
+ytScript.src = "https://www.youtube.com/iframe_api";
+document.head.appendChild(ytScript);
+
+window.onYouTubeIframeAPIReady = function () {
+  ytPlayer = new YT.Player('yt-player', {
+    height: '0',
+    width: '0',
+    playerVars: { controls: 0, disablekb: 1, modestbranding: 1 },
+    events: {
+      onReady: () => {
+        ytReady = true;
+        statusEl.textContent = 'STATUS :: FEED ONLINE — SELECT A TRACK';
+        if (pendingTrackIndex !== null) {
+          selectTrack(pendingTrackIndex, true);
+          pendingTrackIndex = null;
+        }
+      },
+      onStateChange: onPlayerStateChange,
+      onError: () => {
+        statusEl.textContent = 'STATUS :: SIGNAL LOST — TRACK UNAVAILABLE';
+      }
+    }
+  });
+};
+
+function onPlayerStateChange(e) {
+  if (e.data === YT.PlayerState.PLAYING) {
+    isPlaying = true;
+    toggleBtn.innerHTML = '&#10073;&#10073;';
+    if (currentTrack !== null) {
+      statusEl.textContent = 'STATUS :: STREAMING — ' + TRACKS[currentTrack].title.toUpperCase();
+    }
+  } else if (e.data === YT.PlayerState.PAUSED) {
+    isPlaying = false;
+    toggleBtn.innerHTML = '&#9658;';
+    statusEl.textContent = 'STATUS :: PAUSED';
+  } else if (e.data === YT.PlayerState.ENDED) {
+    isPlaying = false;
+    toggleBtn.innerHTML = '&#9658;';
+    statusEl.textContent = 'STATUS :: TRACK ENDED';
+  }
+}
+
+function selectTrack(index, autoplay) {
+  currentTrack = index;
+  trackEls.forEach(el => el.classList.toggle('active', Number(el.dataset.track) === index));
+
+  if (!ytReady) {
+    pendingTrackIndex = index;
+    statusEl.textContent = 'STATUS :: BUFFERING FEED...';
+    return;
+  }
+
+  const id = TRACKS[index].videoId;
+  if (autoplay) {
+    ytPlayer.loadVideoById(id);
+  } else {
+    ytPlayer.cueVideoById(id);
+    statusEl.textContent = 'STATUS :: CUED — ' + TRACKS[index].title.toUpperCase();
+  }
+}
+
+trackEls.forEach(el => {
+  el.addEventListener('click', () => {
+    const idx = Number(el.dataset.track);
+    selectTrack(idx, true);
+  });
+});
+
+toggleBtn.addEventListener('click', () => {
+  if (currentTrack === null) {
+    selectTrack(0, true);
+    return;
+  }
+  if (!ytReady) return;
+  if (isPlaying) {
+    ytPlayer.pauseVideo();
+  } else {
+    ytPlayer.playVideo();
+  }
+});
+</script>
+
+</body>
+</html>
